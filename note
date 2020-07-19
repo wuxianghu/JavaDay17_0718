@@ -1,0 +1,209 @@
+一、回顾
+1.JDBC编程的范式   徐管仲
+2.Statement vs PreparedStatement的区别  朱雨薇
+sql注入
+
+二、今日内容
+1.JDBC如何调用存储过程 ---》了解
+    使用跟PS差不多
+    final CallableStatement cs = conn.prepareCall("CALL pro_findByDeptno(?)");
+    cs.setInt(1,212);
+    final ResultSet rs = cs.executeQuery();
+
+    DELIMITER $$
+    USE `test`$$
+    DROP PROCEDURE IF EXISTS `pro_findByDeptno`$$
+    CREATE DEFINER=`root`@`localhost` PROCEDURE `pro_findByDeptno`(IN aa INT)
+    BEGIN
+      SELECT * FROM dept WHERE deptNo = aa;
+    END$$
+    DELIMITER ;
+
+2.数据库连接池
+    频繁的创建和释放conn资源，需要一定的耗时，我们期望的是conn能够重复使用，同时便于管理。
+    所以，我们可以使用池化思想，即数据库连接池！！
+    需要掌握的优点：
+        1. 资源重用
+        2. 提高响应速度
+        3. 新的资源分配手段
+        4. 统一的连接管理
+
+    目前业界主流的连接池有如下几种：
+        1.C3P0：比较经典的一个连接池
+        2.druid(德鲁伊)：阿里的，比较强悍，后面在web开发中，整合进去，可以通过web页面监控你的每个SQL的性能
+            druid：做大数据分析的工具，apache基金会
+                Apache Druid is a high performance real-time analytics database.
+        3.HikariCP：小日本的，号称是世界上最快的连接池！SpringBoot默认就是使用这个
+        4.DBCP：经典的，tomcat默认就是集成这个，我们自己不怎么用
+    都是通过第三方jar包方式提供！！！！！
+
+    注意：我们使用连接池获取连接的时候，都是通过DataSource去获取和维护连接
+
+    2.1 C3P0
+        实现类：ComboPooledDataSource，知道，后面框架中若使用c3p0,也是配置这个类
+        手动导包的时候，有时候A包，依赖B包，我们难以去判断包与包之间的依赖关系，只有运行的
+        时候，才会报错！！！能不能将这个报错【运行时异常】给规避 -----》 Maven（功能之一可以解决jar包之间的依赖关系）
+
+        在获取连接的时候，使用的也是代理设计模式
+
+    2.2 druid
+       使用跟c3p0差不多
+
+    3.工具包：DBUtils
+    1.QueryRunner runner*****
+        线程安全，用于处理sql的执行结果
+    2.两组重要的方法
+    ResultSetHandler:需要掌握的实现类，3-4个
+        BeanHandler：将查询结果封装成一个bean
+        BeanListHandler:将查询结果封装成一个list<T>
+        ScalarHandler:返回单值结果：max、count、min、sum
+        MapHandler:返回一个map数据
+        MapListHandler:返回的是一个List<Map<String,Object>>
+                    用处，可以分组进行统计结果，进而以柱状图的形式展示出来，Echarts
+
+         public <T> T query(Connection conn, String sql, ResultSetHandler<T> rsh, Object... params) throws SQLException {
+               return this.<T>query(conn, false, sql, rsh, params);
+         }
+        runner.update()
+    3.释放资源的方法
+        DbUtils.closeQuietly(conn); //所有的静悄悄，实际就是做了一个非空判断，然后
+        调用close方法
+
+4.工具：Hutool
+    完全面向对象的工具，Hutool是一个工具集
+    4.1 操作db
+    https://hutool.cn/docs/#/db/%E6%95%B0%E6%8D%AE%E5%BA%93%E7%AE%80%E5%8D%95%E6%93%8D%E4%BD%9C-Db
+        1.直接在src目录下创建一个配置文件，配置直接copy官网
+
+    4.2 验证码
+        Hutool-captcha
+
+
+    4.3 加解密
+    DigestUtil.md5Hex("123456"):db中应该存储的是加密后的结果
+    做登录，应该对页面输入的密码进行加密后，在作为参数查询db
+
+
+    4.4 字符串处理
+    https://hutool.cn/docs/#/core/%E5%B7%A5%E5%85%B7%E7%B1%BB/%E5%AD%97%E7%AC%A6%E4%B8%B2%E5%B7%A5%E5%85%B7-StrUtil
+
+    4.5 IO流处理
+        commons-io:FileUitls
+                   IOUtils.copy()
+
+    4.6 其他
+        比如日期、定时任务..... 自己查文档
+5.Maven
+    5.1 为什么要学Maven
+        ①[共用]若多个工程，共用一些相同的jar包，目前的做法的每个工程都copy一份
+            会有很多很多重复的jar包 ----》 有一个仓库，大家一起用
+        ②[升级方便]若jar包的版本升级的话，重新copy一份新的进来 ----》只需要维护一个版本号
+            若本地仓库没有，它去到远程仓库进行下载，然后存到本地仓库
+        ③[jar包的依赖关系] 以c3p0为例，它需要依赖于别的包，这种依赖我们怎么知道？----》我们只关心
+            某个核心jar包，至于它依赖的，能不能自动帮我们搞定
+        ④[可能经常需要打jar包]：能否一键搞定 或者 一个命令搞定？？
+        ⑤[能否跑完当前project下的所有测试类呢？？？] ok
+        ⑥在github 或者 码云上的 项目都是源码方式，
+            有时候你要运行，需要自己编译[大数据那块，基本都是自己编译成tar.gz]，也需要maven
+         ........
+    5.2 Maven是什么
+        强调一点：要会读，行家，专家
+        上面的Maven都可以搞定！！！在我们的平时的使用中，一般使用如下几个功能：
+        1.jar包管理
+        2.jar包之间的依赖管理
+        3.别人提供的源码，有很多测试，我们在编译打包的时候，可以跳过测试
+        4.可以跟一些其他工具，比Jenkins、GitHub【自己搭建】一起整合，实现一键构建！！！
+        5.目前做一个非常大一个项目，可能会拆分成多个小项目
+            JD商城
+                order系统
+                pay系统
+                物流系统
+                ......
+            在这些子系统中，可能依赖一些共同的jar包，此时可以使用maven的继承
+                在父工程中，统一维护大家公共的jar包，子工程单独去维护自己的
+    5.3 安装和配置
+        两大杀手：Maven,git ，你的代码导入到IDEA中，你不一定能跑起来
+        1.下载
+            http://maven.apache.org/
+        2.解压
+            找一个非中文，非空格目录，解压即可
+        3.配置
+            配置方式跟JAVA_HOME一样
+            MAVEN_HOME = 你自己的路径
+            在path路径中，引入 %MAVEN_HOME%\bin
+        4.测试是否安装ok
+            mvn -v 查看版本号
+            mvn --version
+        5.配置本地仓库[自定义存储位置]和阿里云镜像[加速jar的下载]
+
+    5.4 如何使用 --》HelloWorld
+        体现Maven的标准目录结构
+        src
+            --main
+                --java  ：源码
+                --resource ：配置
+            --test:放测试相关的类
+               --java  ：源码
+               --resource ：配置
+    若jar包没有下载成功，会有.lastUpdated后缀文件，就是说明jar没有下载成功
+    大部分情况下，跟你的网络有关系，这种后缀的文件全部删掉，重新下！！！
+
+    通过HelloWorld我们需要掌握的
+        1.关于gav 在Maven的世界中，gav可以定位一个jar的，且是唯一
+            g:一般是公司的域名倒置
+            a:一般是项目的名称，如果项目很多，可以进一步细分 --模块名称
+            v:版本号
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>5.1.47</version>
+        2.maven有一个约定的目录结构
+        3.最终main的文件编译后的路径：target路径
+
+    5.5 Maven的仓库分类
+        1.本地仓库
+        2.远程仓库
+            ①私服：公司自己搭建的服务器
+            ②镜像：提高jar的下载速度，一般在国内使用这么几个：阿里云、网易云等镜像
+            ③中央仓库：是最全的，部署在国外
+       3.关于本地项目加载jar的顺序
+            先本地，本地没有找私服【Nexus】，找镜像，找中央
+
+    5.6 pom.xml中的重要标签
+        1.<dependencies>:里面放各种dependency
+        2.可以在这个标签下统一维护版本号，里面的子标签，支持自定义
+            <properties>
+                <hutool.version>5.3.9</hutool.version>
+            </properties>
+            <version>${hutool.version}</version>
+        3.<packaging>jar</packaging>
+            常用的打包方式：jar
+                           war包：后面学javaweb会用到
+                           pom:用于继承，给子工程继承
+        4.dependencyManagement
+            这个标签，一般在父工程中使用，只声明有哪些jar包，并不真正引入
+            在真正需要引入的时候，在通过  dependencies 引入，此时不需要写版本号
+        5.<build></build>
+           这个标签，一般是引入一些插件，比如打包插件.....
+           明确：maven是通过各种插件进行管理，比如package、测试、安装.....
+
+    5.7 关于工程的拆分
+          对项目进行拆分，拆分成一个一个的module
+                这个module本身也是maven工程
+          StuMgr ：支付、订单、物流、选课
+             工具类假设有很多：stu-commons module
+             实体类：stu-entity  module 这些实体类，可能为很多的项目使用
+             dao:    stu-dao   module
+
+    5.8 maven的常见命令
+        mvn clean ---> 清空target
+        mvn test ---> 执行整个test包下的所有类的所有test方法
+        命令：可以多个命令组合使用
+        mvn package -->执行打包
+            maven有一个生命周期：3种生命周期
+        mvn install ---> 打jar包
+            maven支持将本地的某个jar包，打入到本地仓库
+            maven跳过测试
+            mvn -Dmaven.test.skip=true clean package
+
+
+
